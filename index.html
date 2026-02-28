@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Happy Birthday!</title>
+    <style>
+        :root {
+            /* 纯正糖果粉色系 */
+            --bg-pink: #FFC0CB; 
+            --box-white: rgba(255, 255, 255, 0.9);
+            --text-pink: #FF69B4;
+        }
+
+        body, html {
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
+            overflow: hidden;
+            background-color: var(--bg-pink);
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        }
+
+        /* 登录界面：极致简洁 */
+        #login-overlay {
+            position: fixed; z-index: 100;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: var(--bg-pink);
+            display: flex; justify-content: center; align-items: center;
+            transition: opacity 1.2s ease;
+        }
+
+        .login-box {
+            background: var(--box-white);
+            padding: 40px; border-radius: 20px;
+            text-align: center; width: 280px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.05);
+        }
+
+        h2 { color: var(--text-pink); margin-bottom: 25px; font-weight: 400; letter-spacing: 2px; }
+
+        input {
+            width: 100%; padding: 12px; margin: 8px 0;
+            border: 1px solid #fce4ec; border-radius: 8px;
+            outline: none; box-sizing: border-box;
+            background: #fff; font-size: 14px;
+        }
+
+        button {
+            width: 100%; padding: 12px; margin-top: 20px;
+            background: var(--text-pink); border: none;
+            color: white; border-radius: 8px;
+            cursor: pointer; font-size: 16px; transition: 0.3s;
+        }
+
+        /* 粒子画布 */
+        #canvas { position: absolute; top: 0; left: 0; z-index: 1; }
+
+        /* 最终祝福界面 */
+        #wish-content {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center; opacity: 0; visibility: hidden;
+            transition: opacity 2s ease; z-index: 10;
+        }
+        .cake { font-size: 100px; margin-bottom: 10px; }
+        .wish-text { color: white; font-size: 28px; font-weight: bold; text-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        
+        .balloon { position: absolute; bottom: -100px; animation: floatUp 7s linear infinite; font-size: 40px; }
+        @keyframes floatUp { to { transform: translateY(-120vh) rotate(20deg); } }
+    </style>
+</head>
+<body>
+
+<audio id="bgm" loop>
+    <source src="bgm.mp3" type="audio/mpeg">
+</audio>
+
+<div id="login-overlay">
+    <div class="login-box">
+        <h2>Verify</h2>
+        <input type="text" id="username" placeholder="用户名">
+        <input type="text" id="birthday" placeholder="密码" maxlength="8">
+        <button onclick="ignite()">登录</button>
+    </div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<div id="wish-content">
+    <div class="cake">🎂</div>
+    <div class="wish-text" id="final-msg"></div>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let particles = [];
+const particleCount = 2000; // 增加粒子数量让文字更饱满
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+class Particle {
+    constructor() {
+        this.x = Math.random() * canvas.width;
+        this.y = Math.random() * canvas.height;
+        this.destX = this.x;
+        this.destY = this.y;
+        this.vx = 0;
+        this.vy = 0;
+        this.friction = 0.89;
+        this.spring = 0.04;
+        this.r = 2.2;
+    }
+    update() {
+        this.vx += (this.destX - this.x) * this.spring;
+        this.vy += (this.destY - this.y) * this.spring;
+        this.vx *= this.friction;
+        this.vy *= this.friction;
+        this.x += this.vx;
+        this.y += this.vy;
+    }
+    draw() {
+        ctx.fillStyle = "white";
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+for(let i=0; i<particleCount; i++) particles.push(new Particle());
+
+function getPoints(text) {
+    const tCanvas = document.createElement('canvas');
+    const tCtx = tCanvas.getContext('2d');
+    tCanvas.width = canvas.width;
+    tCanvas.height = canvas.height;
+    const fSize = Math.min(canvas.width / 5, 130);
+    tCtx.font = `bold ${fSize}px sans-serif`;
+    tCtx.textAlign = 'center';
+    tCtx.textBaseline = 'middle';
+    tCtx.fillText(text, canvas.width/2, canvas.height/2);
+    
+    const data = tCtx.getImageData(0, 0, canvas.width, canvas.height).data;
+    const pts = [];
+    const step = 6; 
+    for(let i=0; i<canvas.width; i+=step) {
+        for(let j=0; j<canvas.height; j+=step) {
+            if(data[(j*canvas.width + i)*4 + 3] > 128) pts.push({x:i, y:j});
+        }
+    }
+    return pts;
+}
+
+function assign(pts) {
+    for(let i=0; i<particles.length; i++) {
+        const target = pts[i % pts.length]; // 重点：如果文字点少，粒子会重叠，不跳动
+        particles[i].destX = target.x;
+        particles[i].destY = target.y;
+    }
+}
+
+function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    particles.forEach(p => { p.update(); p.draw(); });
+    requestAnimationFrame(animate);
+}
+
+function ignite() {
+    const name = document.getElementById('username').value || "你";
+    const bday = document.getElementById('birthday').value;
+    if(bday.length !== 8) return alert("请输入8位密码like20070519");
+
+    // 播放音乐
+    const audio = document.getElementById('bgm');
+    audio.play().catch(() => {
+        // 兼容处理：如果浏览器拦截，点屏幕任何地方都会触发
+        document.addEventListener('click', () => audio.play(), {once:true});
+    });
+
+    const age = new Date().getFullYear() - parseInt(bday.substring(0,4));
+    document.getElementById('login-overlay').style.opacity = '0';
+    
+    setTimeout(() => {
+        document.getElementById('login-overlay').style.display = 'none';
+        assign(getPoints(name));
+        animate();
+
+        setTimeout(() => {
+            assign(getPoints(`${age}岁生日快乐`));
+
+            setTimeout(() => {
+                particles.forEach(p => p.destY = -canvas.height); // 向上飘散
+                const wish = document.getElementById('wish-content');
+                document.getElementById('final-msg').innerText = `祝你${age}岁生日快乐！✨`;
+                wish.style.visibility = 'visible'; wish.style.opacity = '1';
+                setInterval(spawn, 500);
+            }, 4000);
+        }, 3000);
+    }, 1000);
+}
+
+function spawn() {
+    const b = document.createElement('div');
+    b.className = 'balloon';
+    b.innerText = ['🎈','💖','🌸','✨'][Math.floor(Math.random()*4)];
+    b.style.left = Math.random()*90 + 'vw';
+    document.body.appendChild(b);
+    setTimeout(() => b.remove(), 7000);
+}
+</script>
+</body>
+</html>
